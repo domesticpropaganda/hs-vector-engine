@@ -11,11 +11,46 @@ let shapeParams = {
   cameraAngle: 'Fixed', // Default to Fixed
   distance: 0.5, // Default distance between instances
   cameraZoom: 2, // Default camera zoom (2 = default)
+  invertColors: false, // Option to invert colors
 };
 let shapePositions = []; // Store positions for camera centering
 let outlines = []; // Track outline objects for proper cleanup
 
 function init() {
+  // dat.GUI setup
+  gui = new dat.GUI();
+  // Add all controls to the same pane
+  shapeParams.export = function() {
+    const dataURL = renderer.domElement.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.download = 'art.png';
+    link.href = dataURL;
+    link.click();
+  };
+  gui.add(shapeParams, 'export').name('Export PNG');
+  gui.add(shapeParams, 'invertColors').name('Invert Colors').onChange(updateShapes);
+  const shapeController = gui.add(shapeParams, 'type', ['Circle', 'Polygon']).name('Shape').onChange(function(value) {
+    updateShapes();
+    // Show/hide corners controller based on shape selection
+    if (value === 'Polygon') {
+      cornersController.domElement.parentElement.style.display = '';
+    } else {
+      cornersController.domElement.parentElement.style.display = 'none';
+    }
+  });
+  const cornersController = gui.add(shapeParams, 'corners', 3, 12, 1).name('Polygon Corners').onChange(updateShapes);
+  // Hide corners controller initially if not Polygon
+  if (shapeParams.type !== 'Polygon') {
+    cornersController.domElement.parentElement.style.display = 'none';
+  }
+  gui.add(shapeParams, 'path', ['Line', 'Circle']).name('Path').onChange(updateShapes);
+  gui.add(shapeParams, 'instances', 2, 50, 1).name('Instances').onChange(updateShapes);
+  gui.add(shapeParams, 'distance', 0.5, 2, 0.01).name('Distance').onChange(updateShapes);
+  gui.add(shapeParams, 'cameraZoom', 2, 4, 0.01).name('Camera Zoom').onChange(updateCamera);
+  gui.add(shapeParams, 'scaleAnim').name('Scale Animation');
+  gui.add(shapeParams, 'rotateAnim').name('Rotate Animation');
+  gui.add(shapeParams, 'cameraAngle', ['Orbit', 'Fixed']).name('Camera').onChange(updateCamera);
+
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.set(0, 0, 50);
@@ -23,18 +58,6 @@ function init() {
   renderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.getElementById('container').appendChild(renderer.domElement);
-
-  // dat.GUI setup
-  gui = new dat.GUI();
-  gui.add(shapeParams, 'type', ['Circle', 'Triangle', 'Square', 'Polygon']).name('Shape').onChange(updateShapes);
-  gui.add(shapeParams, 'corners', 3, 12, 1).name('Polygon Corners').onChange(updateShapes);
-  gui.add(shapeParams, 'path', ['Line', 'Curve', 'Spiral']).name('Path').onChange(updateShapes);
-  gui.add(shapeParams, 'instances', 2, 50, 1).name('Instances').onChange(updateShapes);
-  gui.add(shapeParams, 'distance', 0.5, 2, 0.01).name('Distance').onChange(updateShapes);
-  gui.add(shapeParams, 'cameraZoom', 2, 4, 0.01).name('Camera Zoom').onChange(updateCamera);
-  gui.add(shapeParams, 'scaleAnim').name('Scale Animation');
-  gui.add(shapeParams, 'rotateAnim').name('Rotate Animation');
-  gui.add(shapeParams, 'cameraAngle', ['Orbit', 'Fixed']).name('Camera').onChange(updateCamera);
 
   // Mouse drag rotation setup
   setupDragRotation();
@@ -112,18 +135,10 @@ function getPathPosition(pathType, i, total) {
   if (pathType === 'Line') {
     // Diagonal line
     return new THREE.Vector3(-spacing * (total - 1) / 2 + spacing * i, -spacing * (total - 1) / 2 + spacing * i, 0);
-  } else if (pathType === 'Curve') {
-    const t = i / (total - 1);
-    const p0 = new THREE.Vector3(-spacing * (total - 1) / 2, 0, 0);
-    const p1 = new THREE.Vector3(0, spacing * (total - 1) / 2, 0);
-    const p2 = new THREE.Vector3(spacing * (total - 1) / 2, 0, 0);
-    const x = (1 - t) * (1 - t) * p0.x + 2 * (1 - t) * t * p1.x + t * t * p2.x;
-    const y = (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * p1.y + t * t * p2.y;
-    return new THREE.Vector3(x, y, 0);
-  } else if (pathType === 'Spiral') {
-    const t = i / (total - 1);
-    const angle = t * Math.PI * 4;
-    const radius = 5 + spacing * t * (total - 1) / 2;
+  } else if (pathType === 'Circle') {
+    // Evenly distribute points around a circle, radius increased by 3x
+    const angle = (i / total) * Math.PI * 2;
+    const radius = 3 * spacing * total / (2 * Math.PI);
     return new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
   }
   return new THREE.Vector3(0, 0, 0);
@@ -133,6 +148,12 @@ function updateShapes() {
   clearShapes();
   shapePositions = [];
   pathGroup = new THREE.Group();
+  // Set background and outline color based on invertColors
+  if (shapeParams.invertColors) {
+    renderer.setClearColor(0xffffff, 1);
+  } else {
+    renderer.setClearColor(0x000000, 1);
+  }
   // First, collect all positions
   for (let i = 0; i < shapeParams.instances; i++) {
     const pos = getPathPosition(shapeParams.path, i, shapeParams.instances);
@@ -172,6 +193,7 @@ function updateShapes() {
     const lookTarget = new THREE.Vector3().addVectors(pos, tangent);
     // For outline, create LineLoop only
     let outline;
+    const outlineColor = shapeParams.invertColors ? 0x000000 : 0xffffff;
     if (shapeParams.type === 'Square') {
       const squareOutlineGeom = new THREE.BufferGeometry();
       const verts = [
@@ -182,7 +204,7 @@ function updateShapes() {
         [-2, -2, 0],
       ];
       squareOutlineGeom.setAttribute('position', new THREE.Float32BufferAttribute(verts.flat(), 3));
-      outline = new THREE.LineLoop(squareOutlineGeom, new THREE.LineBasicMaterial({ color: 0xffffff }));
+      outline = new THREE.LineLoop(squareOutlineGeom, new THREE.LineBasicMaterial({ color: outlineColor }));
       outline.position.copy(pos);
       outline.lookAt(lookTarget);
       pathGroup.add(outline);
@@ -226,7 +248,7 @@ function updateShapes() {
       }
       const outlineGeom = new THREE.BufferGeometry();
       outlineGeom.setAttribute('position', new THREE.Float32BufferAttribute(perimeterPositions, 3));
-      outline = new THREE.LineLoop(outlineGeom, new THREE.LineBasicMaterial({ color: 0xffffff }));
+      outline = new THREE.LineLoop(outlineGeom, new THREE.LineBasicMaterial({ color: outlineColor }));
       outline.position.copy(pos);
       outline.lookAt(lookTarget);
       pathGroup.add(outline);
