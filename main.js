@@ -25,7 +25,7 @@ let meshes = []; // Track filled mesh objects for animation
 function init() {
   // dat.GUI setup
   gui = new dat.GUI();
-  // Add all controls to the same pane
+  // Add Export PNG button to dat.GUI
   shapeParams.export = function() {
     const dataURL = renderer.domElement.toDataURL('image/png');
     const link = document.createElement('a');
@@ -33,7 +33,9 @@ function init() {
     link.href = dataURL;
     link.click();
   };
-  gui.add(shapeParams, 'export').name('Export PNG');
+  
+  // Add all controls to the same pane
+  // Remove export from dat.GUI, use external button instead
   const shapeController = gui.add(shapeParams, 'type', ['Circle', 'Square', 'Polygon']).name('Shape').onChange(function(value) {
     updateShapes();
     // Show/hide corners controller based on shape selection
@@ -52,8 +54,20 @@ function init() {
   const lengthController = gui.add(shapeParams, 'length', 0.1, 10, 0.1).name('Length').onChange(updateShapes);
   const widthController = gui.add(shapeParams, 'width', 0.1, 10, 0.1).name('Width').onChange(updateShapes);
   gui.add(shapeParams, 'fillShapes').name('Fill Shapes').onChange(updateShapes);
-  gui.add(shapeParams, 'kaleidoscope').name('Kaleidoscope').onChange(updateShapes);
-  gui.add(shapeParams, 'kaleidoscopeSegments', 2, 24, 1).name('Kaleidoscope Segments').onChange(updateShapes);
+  const kaleidoscopeController = gui.add(shapeParams, 'kaleidoscope').name('Kaleidoscope').onChange(function(value) {
+    updateShapes();
+    // Show/hide kaleidoscopeSegments controller based on kaleidoscope selection
+    if (value) {
+      kaleidoscopeSegmentsController.domElement.parentElement.style.display = '';
+    } else {
+      kaleidoscopeSegmentsController.domElement.parentElement.style.display = 'none';
+    }
+  });
+  const kaleidoscopeSegmentsController = gui.add(shapeParams, 'kaleidoscopeSegments', 3, 24, 1).name('Kaleidoscope Segments').onChange(updateShapes);
+  // Hide kaleidoscopeSegments controller initially if not enabled
+  if (!shapeParams.kaleidoscope) {
+    kaleidoscopeSegmentsController.domElement.parentElement.style.display = 'none';
+  }
     gui.add(shapeParams, 'scaleAnim').name('Scale Animation');
   gui.add(shapeParams, 'rotateAnim').name('Rotate Animation');
   
@@ -64,7 +78,7 @@ function init() {
 
   gui.add(shapeParams, 'cameraAngle', ['Orbit', 'Fixed']).name('Camera').onChange(updateCamera);
   gui.add(shapeParams, 'invertColors').name('Invert Colors').onChange(updateShapes);
-
+gui.add(shapeParams, 'export').name('Export PNG');
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.set(0, 0, 50);
@@ -233,6 +247,7 @@ function updateShapes() {
     // Kaleidoscope logic
     if (shapeParams.kaleidoscope) {
       const segments = shapeParams.kaleidoscopeSegments;
+      let globalShapeIdx = 0;
       for (let s = 0; s < segments; s++) {
         const angle = (s / segments) * Math.PI * 2;
         const segmentGroup = new THREE.Group();
@@ -264,6 +279,7 @@ function updateShapes() {
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.copy(pos);
             mesh.lookAt(lookTarget);
+            mesh._rotationOffsetIndex = globalShapeIdx; // Store global index for offset
             segmentGroup.add(mesh);
             meshes.push(mesh);
           }
@@ -311,8 +327,10 @@ function updateShapes() {
           outline = new THREE.LineLoop(outlineGeom, new THREE.LineBasicMaterial({ color: outlineColor }));
           outline.position.copy(pos);
           outline.lookAt(lookTarget);
+          outline._rotationOffsetIndex = globalShapeIdx; // Store global index for offset
           segmentGroup.add(outline);
           outlines.push(outline);
+          globalShapeIdx++;
         }
         pathGroup.add(segmentGroup);
       }
@@ -468,14 +486,4 @@ function animate() {
 
 window.onload = init;
 
-// Export PNG
-const exportBtn = document.getElementById('exportBtn');
-if (exportBtn) {
-  exportBtn.onclick = function () {
-    const dataURL = renderer.domElement.toDataURL('image/png');
-    const link = document.createElement('a');
-    link.download = 'art.png';
-    link.href = dataURL;
-    link.click();
-  };
-}
+
