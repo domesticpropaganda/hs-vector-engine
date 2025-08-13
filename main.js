@@ -355,6 +355,7 @@ function updateShapes() {
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.copy(pos);
         mesh.lookAt(lookTarget);
+        mesh._rotationOffsetIndex = i; // Store index for rotation offset
         pathGroup.add(mesh);
         meshes.push(mesh);
       }
@@ -404,6 +405,7 @@ function updateShapes() {
       outline = new THREE.LineLoop(outlineGeom, new THREE.LineBasicMaterial({ color: outlineColor }));
       outline.position.copy(pos);
       outline.lookAt(lookTarget);
+      outline._rotationOffsetIndex = i; // Store index for rotation offset
       pathGroup.add(outline);
       outlines.push(outline);
     }
@@ -414,24 +416,29 @@ function updateShapes() {
 function animate() {
   requestAnimationFrame(animate);
   // Animation presets
+  const now = Date.now() * 0.002;
   for (let outline of outlines) {
     if (shapeParams.scaleAnim) {
-      outline.scale.setScalar(1 + 0.3 * Math.sin(Date.now() * 0.002 + outline.position.x));
+      outline.scale.setScalar(1 + 0.3 * Math.sin(now + outline.position.x));
     } else {
       outline.scale.setScalar(1);
     }
     if (shapeParams.rotateAnim) {
-      outline.rotation.z += 0.01;
+      // Add offset based on index
+      const idx = outline._rotationOffsetIndex || 0;
+      outline.rotation.z = now * 0.7 + idx * 0.15;
     }
   }
   for (let mesh of meshes) {
     if (shapeParams.scaleAnim) {
-      mesh.scale.setScalar(1 + 0.3 * Math.sin(Date.now() * 0.002 + mesh.position.x));
+      mesh.scale.setScalar(1 + 0.3 * Math.sin(now + mesh.position.x));
     } else {
       mesh.scale.setScalar(1);
     }
     if (shapeParams.rotateAnim) {
-      mesh.rotation.z += 0.01;
+      // Add offset based on index
+      const idx = mesh._rotationOffsetIndex || 0;
+      mesh.rotation.z = now * 0.7 + idx * 0.15;
     }
   }
   // Apply drag rotation to the whole path group
