@@ -126,6 +126,10 @@ let pathGroup = null;
 
 function setupDragRotation() {
   const container = document.getElementById('container');
+  // Remove previous listeners if any
+container.onmousedown = null;
+window.onmousemove = null;
+window.onmouseup = null;
   container.addEventListener('mousedown', (e) => {
     isDragging = true;
     prevMouse.x = e.clientX;
@@ -146,12 +150,23 @@ function setupDragRotation() {
 }
 
 function clearShapes() {
-  // Remove previous outlines from scene
+  // Remove previous outlines and meshes from scene and dispose geometries/materials
   if (pathGroup) {
+    pathGroup.traverse(function(obj) {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach(m => m.dispose());
+        } else {
+          obj.material.dispose();
+        }
+      }
+    });
     scene.remove(pathGroup);
     pathGroup = null;
   }
   outlines = [];
+  meshes = [];
 }
 
 function createShapeMesh(type, corners) {
@@ -218,8 +233,8 @@ function updateShapes() {
   shapePositions = [];
   pathGroup = new THREE.Group();
   meshes = [];
-  // Always set background to black
-  renderer.setClearColor(0x000000, 1);
+  // Invert background color if invertColors is true
+  renderer.setClearColor(shapeParams.invertColors ? 0xffffff : 0x000000, 1);
   // First, collect all positions
   for (let i = 0; i < shapeParams.instances; i++) {
     const pos = getPathPosition(shapeParams.path, i, shapeParams.instances);
@@ -245,9 +260,10 @@ function updateShapes() {
       const segments = shapeParams.kaleidoscopeSegments;
       let globalShapeIdx = 0;
       for (let s = 0; s < segments; s++) {
-        const angle = (s / segments) * Math.PI * 2;
-        const segmentGroup = new THREE.Group();
-        segmentGroup.rotation.z = angle;
+  // Each branch rotates by 360/segments degrees
+  const angle = (s * 2 * Math.PI) / segments; // 360 deg / segments
+  const segmentGroup = new THREE.Group();
+  segmentGroup.rotation.z = angle;
         for (let i = 0; i < shapeParams.instances; i++) {
           const geometry = createShapeMesh(shapeParams.type, shapeParams.corners);
           const pos = shapePositions[i].clone().sub(center);
@@ -268,9 +284,10 @@ function updateShapes() {
           }
           const lookTarget = new THREE.Vector3().addVectors(pos, tangent);
           let outline;
-          const outlineColor = shapeParams.invertColors ? 0x000000 : 0xffffff;
+          // Invert fill and outline colors: when background is black, outlines are black, fills are white
+          const outlineColor = shapeParams.invertColors ? 0xffffff : 0x000000;
           if (shapeParams.fillShapes) {
-            const fillColor = shapeParams.invertColors ? 0xffffff : 0x000000;
+            const fillColor = shapeParams.invertColors ? 0x000000 : 0xffffff;
             const material = new THREE.MeshBasicMaterial({ color: fillColor, side: THREE.DoubleSide });
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.copy(pos);
