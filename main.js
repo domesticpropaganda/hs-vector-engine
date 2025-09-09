@@ -218,12 +218,8 @@ function updateShapes() {
   shapePositions = [];
   pathGroup = new THREE.Group();
   meshes = [];
-  // Set background and outline color based on invertColors
-  if (shapeParams.invertColors) {
-    renderer.setClearColor(0xffffff, 1);
-  } else {
-    renderer.setClearColor(0x000000, 1);
-  }
+  // Always set background to black
+  renderer.setClearColor(0x000000, 1);
   // First, collect all positions
   for (let i = 0; i < shapeParams.instances; i++) {
     const pos = getPathPosition(shapeParams.path, i, shapeParams.instances);
@@ -364,11 +360,10 @@ function updateShapes() {
       const lookTarget = new THREE.Vector3().addVectors(pos, tangent);
       // For outline, create LineLoop only
       let outline;
-      const outlineColor = shapeParams.invertColors ? 0x000000 : 0xffffff;
+        const outlineColor = shapeParams.invertColors ? 0xffffff : 0x000000;
       // Optionally add filled mesh
       if (shapeParams.fillShapes) {
-        // Fill color matches background color
-        const fillColor = shapeParams.invertColors ? 0xffffff : 0x000000;
+          const fillColor = shapeParams.invertColors ? 0x000000 : 0xffffff;
         const material = new THREE.MeshBasicMaterial({ color: fillColor, side: THREE.DoubleSide });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.copy(pos);
